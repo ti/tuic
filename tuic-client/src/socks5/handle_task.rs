@@ -32,7 +32,7 @@ impl Server {
                 {
                     Ok(assoc) => assoc,
                     Err((err, mut conn)) => {
-                        let _ = conn.shutdown();
+                        let _ = conn.shutdown().await;
                         log::warn!("[socks5] [{peer_addr}] [associate] [{assoc_id:#06x}] command reply error: {err}");
                         return;
                     }
