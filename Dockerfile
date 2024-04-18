@@ -10,7 +10,6 @@ COPY ./tuic ./tuic
 COPY ./tuic-quinn ./tuic-quinn
 COPY ./tuic-client ./tuic-client
 COPY ./tuic-server ./tuic-server
-ENV USTFLAGS="-C target-feature=+crt-static"
 RUN cargo build --release
 
 FROM alpine:latest
