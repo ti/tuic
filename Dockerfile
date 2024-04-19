@@ -1,8 +1,10 @@
-FROM rust:1.77.2-alpine as builder
-RUN apk update && apk add --no-cache \
-   musl-dev git \
-   openssl openssl-dev openssl-libs-static \
-   build-base
+FROM rust:1.77-alpine as builder
+RUN apk update && apk add --no-cache git \
+   musl-dev build-base clang lld compiler-rt \
+   openssl openssl-dev openssl-libs-static
+
+ENV CC=clang
+ENV RUSTFLAGS="-C linker=clang -C link-arg=-static"
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
