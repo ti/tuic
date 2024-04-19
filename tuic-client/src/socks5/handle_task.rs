@@ -41,7 +41,8 @@ impl Server {
                 UDP_SESSIONS
                     .get()
                     .unwrap()
-                    .lock()
+                    .write()
+                    .await
                     .insert(assoc_id, session.clone());
 
                 let handle_local_incoming_pkt = async move {
@@ -57,7 +58,8 @@ impl Server {
                         let forward = async move {
                             let target_addr = match target_addr {
                                 Address::DomainAddress(domain, port) => {
-                                    let domain_string: String = String::from_utf8_lossy(&domain).to_string();
+                                    let domain_string: String =
+                                        String::from_utf8_lossy(&domain).to_string();
                                     TuicAddress::DomainAddress(domain_string, port)
                                 }
                                 Address::SocketAddress(addr) => TuicAddress::SocketAddress(addr),
@@ -97,7 +99,8 @@ impl Server {
                 UDP_SESSIONS
                     .get()
                     .unwrap()
-                    .lock()
+                    .write()
+                    .await
                     .remove(&assoc_id)
                     .unwrap();
 
@@ -121,7 +124,7 @@ impl Server {
                 match replied {
                     Ok(mut conn) => {
                         let _ = conn.close().await;
-                    },
+                    }
                     Err((err, mut conn)) => {
                         let _ = conn.shutdown().await;
                         log::warn!("[socks5] [{peer_addr}] [associate] [{assoc_id:#06x}] command reply error: {err}")
@@ -152,7 +155,9 @@ impl Server {
     pub async fn handle_connect(conn: Connect<connect::state::NeedReply>, addr: Address) {
         let peer_addr = conn.peer_addr().unwrap();
         let target_addr = match addr {
-            Address::DomainAddress(domain, port) => TuicAddress::DomainAddress(String::from_utf8(domain).unwrap().to_string(), port),
+            Address::DomainAddress(domain, port) => {
+                TuicAddress::DomainAddress(String::from_utf8(domain).unwrap().to_string(), port)
+            }
             Address::SocketAddress(addr) => TuicAddress::SocketAddress(addr),
         };
 

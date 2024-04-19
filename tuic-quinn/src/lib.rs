@@ -3,6 +3,7 @@
 use self::side::Side;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures_util::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+pub use quinn;
 use quinn::{
     Connection as QuinnConnection, ConnectionError, RecvStream, SendDatagramError, SendStream,
     UnknownStream, VarInt,
@@ -408,7 +409,9 @@ impl Connect {
     pub fn addr(&self) -> &Address {
         match &self.model {
             Side::Client(model) => {
-                let Header::Connect(conn) = model.header() else { unreachable!() };
+                let Header::Connect(conn) = model.header() else {
+                    unreachable!()
+                };
                 conn.addr()
             }
             Side::Server(model) => model.addr(),

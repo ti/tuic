@@ -5,7 +5,6 @@ use crate::{
 };
 use crossbeam_utils::atomic::AtomicCell;
 use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
 use quinn::{
     congestion::{BbrConfig, CubicConfig, NewRenoConfig},
     ClientConfig, Connection as QuinnConnection, Endpoint as QuinnEndpoint, EndpointConfig,
@@ -18,18 +17,17 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
     time::Duration,
 };
-use tokio::{
-    sync::{Mutex as AsyncMutex, OnceCell as AsyncOnceCell},
-    time,
-};
+use tokio::sync::RwLock as AsyncRwLock;
+use tokio::{sync::OnceCell as AsyncOnceCell, time};
+
 use tuic_quinn::{side, Connection as Model};
 use uuid::Uuid;
 
 mod handle_stream;
 mod handle_task;
 
-static ENDPOINT: OnceCell<Mutex<Endpoint>> = OnceCell::new();
-static CONNECTION: AsyncOnceCell<AsyncMutex<Connection>> = AsyncOnceCell::const_new();
+static ENDPOINT: OnceCell<AsyncRwLock<Endpoint>> = OnceCell::new();
+static CONNECTION: AsyncOnceCell<AsyncRwLock<Connection>> = AsyncOnceCell::const_new();
 static TIMEOUT: AtomicCell<Duration> = AtomicCell::new(Duration::from_secs(0));
 
 pub const ERROR_CODE: VarInt = VarInt::from_u32(0);
@@ -117,7 +115,7 @@ impl Connection {
         };
 
         ENDPOINT
-            .set(Mutex::new(ep))
+            .set(AsyncRwLock::new(ep))
             .map_err(|_| "endpoint already initialized")
             .unwrap();
 
@@ -131,21 +129,22 @@ impl Connection {
             ENDPOINT
                 .get()
                 .unwrap()
-                .lock()
+                .read()
+                .await
                 .connect()
                 .await
-                .map(AsyncMutex::new)
+                .map(AsyncRwLock::new)
         };
 
         let try_get_conn = async {
             let mut conn = CONNECTION
                 .get_or_try_init(|| try_init_conn)
                 .await?
-                .lock()
+                .write()
                 .await;
 
             if conn.is_closed() {
-                let new_conn = ENDPOINT.get().unwrap().lock().connect().await?;
+                let new_conn = ENDPOINT.get().unwrap().read().await.connect().await?;
                 *conn = new_conn;
             }
 
@@ -254,7 +253,7 @@ struct Endpoint {
 }
 
 impl Endpoint {
-    async fn connect(&mut self) -> Result<Connection, Error> {
+    async fn connect(&self) -> Result<Connection, Error> {
         let mut last_err = None;
 
         for addr in self.server.resolve().await? {

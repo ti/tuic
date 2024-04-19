@@ -1,7 +1,6 @@
 use self::{authenticated::Authenticated, udp_session::UdpSession};
 use crate::{error::Error, utils::UdpRelayMode};
 use crossbeam_utils::atomic::AtomicCell;
-use parking_lot::Mutex;
 use quinn::{Connecting, Connection as QuinnConnection, VarInt};
 use register_count::Counter;
 use std::{
@@ -9,6 +8,7 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
     time::Duration,
 };
+use tokio::sync::RwLock as AsyncRwLock;
 use tokio::time;
 use tuic_quinn::{side, Authenticate, Connection as Model};
 use uuid::Uuid;
@@ -29,7 +29,7 @@ pub struct Connection {
     udp_relay_ipv6: bool,
     auth: Authenticated,
     task_negotiation_timeout: Duration,
-    udp_sessions: Arc<Mutex<HashMap<u16, UdpSession>>>,
+    udp_sessions: Arc<AsyncRwLock<HashMap<u16, UdpSession>>>,
     udp_relay_mode: Arc<AtomicCell<Option<UdpRelayMode>>>,
     max_external_pkt_size: usize,
     remote_uni_stream_cnt: Counter,
@@ -147,7 +147,7 @@ impl Connection {
             udp_relay_ipv6,
             auth: Authenticated::new(),
             task_negotiation_timeout,
-            udp_sessions: Arc::new(Mutex::new(HashMap::new())),
+            udp_sessions: Arc::new(AsyncRwLock::new(HashMap::new())),
             udp_relay_mode: Arc::new(AtomicCell::new(None)),
             max_external_pkt_size,
             remote_uni_stream_cnt: Counter::new(),
@@ -157,7 +157,7 @@ impl Connection {
         }
     }
 
-    fn authenticate(&self, auth: &Authenticate) -> Result<(), Error> {
+    async fn authenticate(&self, auth: &Authenticate) -> Result<(), Error> {
         if self.auth.get().is_some() {
             Err(Error::DuplicatedAuth)
         } else if self
@@ -165,7 +165,7 @@ impl Connection {
             .get(&auth.uuid())
             .map_or(false, |password| auth.validate(password))
         {
-            self.auth.set(auth.uuid());
+            self.auth.set(auth.uuid()).await;
             Ok(())
         } else {
             Err(Error::AuthFailed(auth.uuid()))

@@ -1,13 +1,13 @@
 use super::Connection;
 use crate::error::Error;
 use bytes::Bytes;
-use parking_lot::Mutex;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::{
     io::Error as IoError,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket as StdUdpSocket},
     sync::Arc,
 };
+use tokio::sync::RwLock as AsyncRwLock;
 use tokio::{
     net::UdpSocket,
     sync::oneshot::{self, Sender},
@@ -23,7 +23,7 @@ struct UdpSessionInner {
     socket_v4: UdpSocket,
     socket_v6: Option<UdpSocket>,
     max_pkt_size: usize,
-    close: Mutex<Option<Sender<()>>>,
+    close: AsyncRwLock<Option<Sender<()>>>,
 }
 
 impl UdpSession {
@@ -89,7 +89,7 @@ impl UdpSession {
             socket_v4,
             socket_v6,
             max_pkt_size,
-            close: Mutex::new(Some(tx)),
+            close: AsyncRwLock::new(Some(tx)),
         }));
 
         let session_listening = session.clone();
@@ -161,7 +161,7 @@ impl UdpSession {
         }
     }
 
-    pub fn close(&self) {
-        let _ = self.0.close.lock().take().unwrap().send(());
+    pub async fn close(&self) {
+        let _ = self.0.close.write().await.take().unwrap().send(());
     }
 }

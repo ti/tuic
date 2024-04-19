@@ -32,14 +32,18 @@ impl Authenticate<side::Tx> {
 
     /// Returns the header of the `Authenticate` command
     pub fn header(&self) -> &Header {
-        let Side::Tx(tx) = &self.inner else { unreachable!() };
+        let Side::Tx(tx) = &self.inner else {
+            unreachable!()
+        };
         &tx.header
     }
 }
 
 impl Debug for Authenticate<side::Tx> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let Side::Tx(tx) = &self.inner else { unreachable!() };
+        let Side::Tx(tx) = &self.inner else {
+            unreachable!()
+        };
         f.debug_struct("Authenticate")
             .field("header", &tx.header)
             .finish()
@@ -61,13 +65,17 @@ impl Authenticate<side::Rx> {
 
     /// Returns the UUID of the peer
     pub fn uuid(&self) -> Uuid {
-        let Side::Rx(rx) = &self.inner else { unreachable!() };
+        let Side::Rx(rx) = &self.inner else {
+            unreachable!()
+        };
         rx.uuid
     }
 
     /// Returns the token of the peer
     pub fn token(&self) -> [u8; 32] {
-        let Side::Rx(rx) = &self.inner else { unreachable!() };
+        let Side::Rx(rx) = &self.inner else {
+            unreachable!()
+        };
         rx.token
     }
 
@@ -77,14 +85,18 @@ impl Authenticate<side::Rx> {
         password: impl AsRef<[u8]>,
         exporter: &impl KeyingMaterialExporter,
     ) -> bool {
-        let Side::Rx(rx) = &self.inner else { unreachable!() };
+        let Side::Rx(rx) = &self.inner else {
+            unreachable!()
+        };
         rx.token == exporter.export_keying_material(rx.uuid.as_ref(), password.as_ref())
     }
 }
 
 impl Debug for Authenticate<side::Rx> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let Side::Rx(rx) = &self.inner else { unreachable!() };
+        let Side::Rx(rx) = &self.inner else {
+            unreachable!()
+        };
         f.debug_struct("Authenticate")
             .field("uuid", &rx.uuid)
             .field("token", &rx.token)

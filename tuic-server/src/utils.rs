@@ -1,6 +1,5 @@
 use rustls::{Certificate, PrivateKey};
-use rustls_pemfile::{Item};
-
+use rustls_pemfile::Item;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     fs::{self, File},
@@ -8,7 +7,6 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-
 
 pub fn load_certs(path: PathBuf) -> Result<Vec<Certificate>, IoError> {
     let mut file = BufReader::new(File::open(&path)?);
@@ -26,6 +24,7 @@ pub fn load_certs(path: PathBuf) -> Result<Vec<Certificate>, IoError> {
 
     Ok(certs)
 }
+
 pub fn load_priv_key(path: PathBuf) -> Result<PrivateKey, IoError> {
     let mut file = BufReader::new(File::open(&path)?);
     let mut priv_key = None;
@@ -41,7 +40,6 @@ pub fn load_priv_key(path: PathBuf) -> Result<PrivateKey, IoError> {
         .unwrap_or_else(|| fs::read(&path))
         .map(PrivateKey)
 }
-
 
 #[derive(Clone, Copy)]
 pub enum UdpRelayMode {

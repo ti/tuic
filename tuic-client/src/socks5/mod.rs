@@ -1,11 +1,12 @@
 use crate::{config::Local, error::Error};
 use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use socks5_server::{auth::{Password}, Auth, Command, Server as Socks5Server};
+use socks5_server::{auth::Password, Auth, Command, Server as Socks5Server};
 
 use socks5_proto::handshake::password::Error as AuthError;
 
+use async_trait::async_trait;
+use socks5_proto::handshake::Method;
 use std::{
     collections::HashMap,
     net::{SocketAddr, TcpListener as StdTcpListener},
@@ -14,12 +15,11 @@ use std::{
         Arc,
     },
 };
-use async_trait::async_trait;
-use socks5_proto::handshake::Method;
-
-use tokio::io::AsyncWriteExt;
 
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::RwLock as AsyncRwLock;
+
+use tokio::io::AsyncWriteExt;
 
 mod handle_task;
 mod udp_session;
@@ -49,7 +49,7 @@ impl Server {
             .unwrap();
 
         UDP_SESSIONS
-            .set(Mutex::new(HashMap::new()))
+            .set(AsyncRwLock::new(HashMap::new()))
             .map_err(|_| "failed initializing socks5 UDP session pool")
             .unwrap();
 
@@ -99,12 +99,12 @@ impl Server {
         };
         // let auth = Arc::new(NoAuth) as Arc<_>;
 
-
-        let auth: Arc<dyn Auth<Output=Result<bool, AuthError>> + Send + Sync> = match (username, password) {
-            (Some(username), Some(password)) => Arc::new(Password::new(username, password)),
-            (None, None) => Arc::new(NoPassword {}),
-            _ => return Err(Error::InvalidSocks5Auth),
-        };
+        let auth: Arc<dyn Auth<Output = Result<bool, AuthError>> + Send + Sync> =
+            match (username, password) {
+                (Some(username), Some(password)) => Arc::new(Password::new(username, password)),
+                (None, None) => Arc::new(NoPassword {}),
+                _ => return Err(Error::InvalidSocks5Auth),
+            };
 
         Ok(Self {
             inner: Socks5Server::new(socket, auth),
@@ -130,7 +130,7 @@ impl Server {
                             Ok((conn, result)) => {
                                 if let Ok(false) = result {
                                     if let Err(ref err) = result {
-                                        log::warn!("[socks5] authentication failed: {}",err);
+                                        log::warn!("[socks5] authentication failed: {}", err);
                                     } else {
                                         log::warn!("[socks5] authentication failed.");
                                     }
@@ -138,15 +138,18 @@ impl Server {
                                 }
                                 match conn.wait().await {
                                     Ok(Command::Associate(associate, _)) => {
-                                        let assoc_id = server.next_assoc_id.fetch_add(1, Ordering::Relaxed);
-                                        log::info!("[socks5] [{addr}] [associate] [{assoc_id:#06x}]");
+                                        let assoc_id =
+                                            server.next_assoc_id.fetch_add(1, Ordering::Relaxed);
+                                        log::info!(
+                                            "[socks5] [{addr}] [associate] [{assoc_id:#06x}]"
+                                        );
                                         Self::handle_associate(
                                             associate,
                                             assoc_id,
                                             server.dual_stack,
                                             server.max_pkt_size,
                                         )
-                                            .await;
+                                        .await;
                                     }
                                     Ok(Command::Bind(bind, _)) => {
                                         log::info!("[socks5] [{addr}] [bind]");
@@ -175,7 +178,6 @@ impl Server {
         }
     }
 }
-
 
 // Not authenticate at all, but return success
 #[derive(Clone, Debug)]

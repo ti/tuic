@@ -35,11 +35,11 @@ impl Connection {
             .map_err(|_| Error::TaskNegotiationTimeout)??;
 
             if let Task::Authenticate(auth) = &task {
-                self.authenticate(auth)?;
+                self.authenticate(auth).await?;
             }
 
             tokio::select! {
-                () = self.auth.clone() => {}
+                () = self.auth.wait() => {}
                 err = self.inner.closed() => return Err(Error::from(err)),
             };
 
@@ -96,7 +96,7 @@ impl Connection {
             .map_err(|_| Error::TaskNegotiationTimeout)??;
 
             tokio::select! {
-                () = self.auth.clone() => {}
+                () = self.auth.wait() => {}
                 err = self.inner.closed() => return Err(Error::from(err)),
             };
 
@@ -130,7 +130,7 @@ impl Connection {
             let task = self.model.accept_datagram(dg)?;
 
             tokio::select! {
-                () = self.auth.clone() => {}
+                () = self.auth.wait() => {}
                 err = self.inner.closed() => return Err(Error::from(err)),
             };
 

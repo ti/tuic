@@ -121,11 +121,9 @@ impl Connection {
             Ok(Some((pkt, addr, _))) => {
                 log::info!("[relay] [packet] [{assoc_id:#06x}] [from-{mode}] [{pkt_id:#06x}] from {addr}");
 
-
                 let addr = match addr {
                     Address::None => unreachable!(),
                     Address::DomainAddress(domain, port) => {
-
                         Socks5Address::DomainAddress(domain.as_bytes().to_vec(), port)
                     }
                     Address::SocketAddress(addr) => Socks5Address::SocketAddress(addr),
@@ -134,7 +132,8 @@ impl Connection {
                 let session = SOCKS5_UDP_SESSIONS
                     .get()
                     .unwrap()
-                    .lock()
+                    .read()
+                    .await
                     .get(&assoc_id)
                     .cloned();
 

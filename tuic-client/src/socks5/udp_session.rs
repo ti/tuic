@@ -1,7 +1,6 @@
 use crate::error::Error;
 use bytes::Bytes;
 use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use socks5_proto::{Address, UdpHeader};
 use socks5_server::AssociatedUdpSocket;
@@ -13,8 +12,8 @@ use std::{
 };
 
 use tokio::net::UdpSocket;
-
-pub static UDP_SESSIONS: OnceCell<Mutex<HashMap<u16, UdpSession>>> = OnceCell::new();
+use tokio::sync::RwLock as AsyncRwLock;
+pub static UDP_SESSIONS: OnceCell<AsyncRwLock<HashMap<u16, UdpSession>>> = OnceCell::new();
 
 #[derive(Clone)]
 pub struct UdpSession {
@@ -75,12 +74,13 @@ impl UdpSession {
 
     pub async fn send(&self, pkt: Bytes, src_addr: Address) -> Result<(), Error> {
         let src_addr_display = src_addr.to_string();
-
         log::debug!(
-            "[socks5] [{ctrl_addr}] [associate] [{assoc_id:#06x}] send packet from {src_addr_display}",
+            "[socks5] [{ctrl_addr}] [associate] [{assoc_id:#06x}] send packet from {src_addr_display} to {dst_addr}",
             ctrl_addr = self.ctrl_addr,
             assoc_id = self.assoc_id,
+            dst_addr = self.socket.get_ref().peer_addr().unwrap(),
         );
+
         let header = UdpHeader::new(0, src_addr);
         if let Err(err) = self.socket.send(pkt, &header).await {
             log::warn!(
@@ -98,13 +98,10 @@ impl UdpSession {
     pub async fn recv(&self) -> Result<(Bytes, Address), Error> {
         let (pkt, udp_header, src_addr) = match self.socket.recv_from().await {
             Ok((pkt, udp_header, src_addr)) => (pkt, udp_header, src_addr),
-            Err((err,_)) => {
+            Err((err, _)) => {
                 let msg = format!("recv from error: {err}");
-                return Err(IoError::new(
-                    ErrorKind::Other,
-                    msg,
-                ))?
-            },
+                return Err(IoError::new(ErrorKind::Other, msg))?;
+            }
         };
         let dst_addr = udp_header.address;
         let frag = udp_header.frag;

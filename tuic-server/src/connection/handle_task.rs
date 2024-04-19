@@ -119,22 +119,31 @@ impl Connection {
                 src_addr = addr,
             );
 
-            let session = match self.udp_sessions.lock().entry(assoc_id) {
-                Entry::Occupied(entry) => entry.get().clone(),
-                Entry::Vacant(entry) => {
-                    let session = UdpSession::new(
-                        self.clone(),
-                        assoc_id,
-                        self.udp_relay_ipv6,
-                        self.max_external_pkt_size,
-                    )?;
-                    entry.insert(session.clone());
-                    session
-                }
+            let guard = self.udp_sessions.read().await;
+            let session = guard.get(&assoc_id).map(|v| v.to_owned());
+            drop(guard);
+            let session = match session {
+                Some(v) => v,
+                None => match self.udp_sessions.write().await.entry(assoc_id) {
+                    Entry::Occupied(entry) => entry.get().clone(),
+                    Entry::Vacant(entry) => {
+                        let session = UdpSession::new(
+                            self.clone(),
+                            assoc_id,
+                            self.udp_relay_ipv6,
+                            self.max_external_pkt_size,
+                        )?;
+                        entry.insert(session.clone());
+                        session
+                    }
+                },
             };
 
             let Some(socket_addr) = resolve_dns(&addr).await?.next() else {
-                return Err(Error::from(IoError::new(ErrorKind::NotFound, "no address resolved")));
+                return Err(Error::from(IoError::new(
+                    ErrorKind::NotFound,
+                    "no address resolved",
+                )));
             };
 
             session.send(pkt, socket_addr).await
@@ -159,8 +168,8 @@ impl Connection {
             user = self.auth,
         );
 
-        if let Some(session) = self.udp_sessions.lock().remove(&assoc_id) {
-            session.close();
+        if let Some(session) = self.udp_sessions.write().await.remove(&assoc_id) {
+            session.close().await;
         }
     }
 
