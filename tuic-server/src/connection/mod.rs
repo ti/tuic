@@ -52,7 +52,6 @@ impl Connection {
         gc_lifetime: Duration,
     ) {
         let addr = conn.remote_address();
-
         let init = async {
             let conn = if zero_rtt_handshake {
                 match conn.into_0rtt() {

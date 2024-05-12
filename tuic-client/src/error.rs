@@ -4,6 +4,7 @@ use std::io::Error as IoError;
 use thiserror::Error;
 use tuic_quinn::Error as ModelError;
 
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
@@ -26,6 +27,8 @@ pub enum Error {
     WrongPacketSource,
     #[error("invalid socks5 authentication")]
     InvalidSocks5Auth,
+    #[error("other error")]
+    Other(String),
 }
 
 impl From<ConnectionError> for Error {

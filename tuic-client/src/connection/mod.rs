@@ -10,8 +10,11 @@ use quinn::{
     ClientConfig, Connection as QuinnConnection, Endpoint as QuinnEndpoint, EndpointConfig,
     TokioRuntime, TransportConfig, VarInt, ZeroRttAccepted,
 };
+use quinn::crypto::rustls::QuicClientConfig;
+
 use register_count::Counter;
-use rustls::{version, ClientConfig as RustlsClientConfig};
+use rustls::{ClientConfig as RustlsClientConfig};
+
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket},
     sync::{atomic::AtomicU32, Arc},
@@ -48,23 +51,26 @@ pub struct Connection {
 
 impl Connection {
     pub fn set_config(cfg: Relay) -> Result<(), Error> {
-        let certs = utils::load_certs(cfg.certificates, cfg.disable_native_certs)?;
-
-        let mut crypto = RustlsClientConfig::builder()
-            .with_safe_default_cipher_suites()
-            .with_safe_default_kx_groups()
-            .with_protocol_versions(&[&version::TLS13])
+        let root_store = utils::load_certs(cfg.certificates, cfg.disable_native_certs)?;
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let mut crypto = RustlsClientConfig::builder_with_provider(provider.clone())
+            .with_protocol_versions(&[&rustls::version::TLS13])
             .unwrap()
-            .with_root_certificates(certs)
+            .with_root_certificates(root_store)
             .with_no_client_auth();
 
         crypto.alpn_protocols = cfg.alpn;
         crypto.enable_early_data = true;
         crypto.enable_sni = !cfg.disable_sni;
 
-        let mut config = ClientConfig::new(Arc::new(crypto));
-        let mut tp_cfg = TransportConfig::default();
+        let client_crypto = QuicClientConfig::try_from(crypto)
+            .map_err(|err| Error::Other(
+                format!("Conversion from crypto failed: {:?}", err)))?;
 
+        let mut config = ClientConfig::new(Arc::new(client_crypto));
+
+
+        let mut tp_cfg = TransportConfig::default();
         tp_cfg
             .max_concurrent_bidi_streams(VarInt::from(DEFAULT_CONCURRENT_STREAMS))
             .max_concurrent_uni_streams(VarInt::from(DEFAULT_CONCURRENT_STREAMS))
@@ -216,7 +222,8 @@ impl Connection {
                     Ok(dg) => tokio::spawn(self.clone().handle_datagram(dg)),
                     Err(err) => break err,
                 },
-            };
+            }
+            ;
         };
 
         log::warn!("[relay] connection error: {err}");

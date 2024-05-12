@@ -1,45 +1,61 @@
-use rustls::{Certificate, PrivateKey};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pemfile::Item;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
-    fs::{self, File},
-    io::{BufReader, Error as IoError},
+    fs::{File},
+    io::{BufReader},
     path::PathBuf,
     str::FromStr,
 };
 
-pub fn load_certs(path: PathBuf) -> Result<Vec<Certificate>, IoError> {
-    let mut file = BufReader::new(File::open(&path)?);
+
+
+pub fn load_certs(filename: PathBuf) -> Vec<CertificateDer<'static>> {
+    let file = File::open(filename).expect("Failed to open file");
+    let mut reader = BufReader::new(file);
     let mut certs = Vec::new();
 
-    while let Ok(Some(item)) = rustls_pemfile::read_one(&mut file) {
-        if let Item::X509Certificate(cert) = item {
-            certs.push(Certificate(cert));
+    while let Ok(Some(item)) =  rustls_pemfile::read_one(&mut reader) {
+        match item {
+            Item::X509Certificate(cert) => {
+                certs.push(cert);
+            }
+            _ => continue, // Skip other items
         }
     }
 
     if certs.is_empty() {
-        certs = vec![Certificate(fs::read(&path)?)];
+        // If no X.509 certificates were found, fall back to rustls_pemfile::certs
+        certs = rustls_pemfile::certs(&mut reader)
+            .map(|result| result.unwrap())
+            .collect();
     }
 
-    Ok(certs)
+    certs
 }
 
-pub fn load_priv_key(path: PathBuf) -> Result<PrivateKey, IoError> {
-    let mut file = BufReader::new(File::open(&path)?);
-    let mut priv_key = None;
 
-    while let Ok(Some(item)) = rustls_pemfile::read_one(&mut file) {
-        if let Item::RSAKey(key) | Item::PKCS8Key(key) | Item::ECKey(key) = item {
-            priv_key = Some(key);
+pub fn load_priv_key(filename: PathBuf) -> PrivateKeyDer<'static> {
+    let keyfile = File::open(&filename).expect("cannot open private key file");
+    let mut reader = BufReader::new(keyfile);
+
+    loop {
+        match rustls_pemfile::read_one(&mut reader).expect("cannot parse private key .pem file") {
+            Some(Item::Pkcs1Key(key)) => return key.into(),
+            Some(Item::Pkcs8Key(key)) => return key.into(),
+            Some(Item::Sec1Key(key)) => return key.into(),
+            None => break,
+            _ => {}
         }
     }
 
-    priv_key
-        .map(Ok)
-        .unwrap_or_else(|| fs::read(&path))
-        .map(PrivateKey)
+    panic!(
+        "no keys found in {:?} (encrypted keys not supported)",
+        filename
+    );
 }
+
+
 
 #[derive(Clone, Copy)]
 pub enum UdpRelayMode {

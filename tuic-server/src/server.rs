@@ -7,7 +7,9 @@ use crate::{
 use quinn::{
     congestion::{BbrConfig, CubicConfig, NewRenoConfig},
     Endpoint, EndpointConfig, IdleTimeout, ServerConfig, TokioRuntime, TransportConfig, VarInt,
+    crypto::rustls::QuicServerConfig,
 };
+
 use rustls::{version, ServerConfig as RustlsServerConfig};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::{
@@ -32,20 +34,24 @@ pub struct Server {
 
 impl Server {
     pub fn init(cfg: Config) -> Result<Self, Error> {
-        let certs = utils::load_certs(cfg.certificate)?;
-        let priv_key = utils::load_priv_key(cfg.private_key)?;
-
-        let mut crypto = RustlsServerConfig::builder()
-            .with_safe_default_cipher_suites()
-            .with_safe_default_kx_groups()
+        let certs = utils::load_certs(cfg.certificate);
+        let priv_key = utils::load_priv_key(cfg.private_key);
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let mut crypto = RustlsServerConfig::builder_with_provider(provider.clone())
             .with_protocol_versions(&[&version::TLS13])
-            .unwrap()
+            .expect("inconsistent cipher-suites/versions specified")
             .with_no_client_auth()
-            .with_single_cert(certs, priv_key)?;
+            .with_single_cert(certs, priv_key)
+            .expect("bad certificates/private key");
+
 
         crypto.alpn_protocols = cfg.alpn;
         crypto.max_early_data_size = u32::MAX;
         crypto.send_half_rtt_data = cfg.zero_rtt_handshake;
+
+        let crypto = QuicServerConfig::try_from(crypto)
+            .map_err(|err| Error::Other(
+                format!("Conversion from crypto failed: {:?}", err)))?;
 
         let mut config = ServerConfig::with_crypto(Arc::new(crypto));
         let mut tp_cfg = TransportConfig::default();
@@ -122,10 +128,7 @@ impl Server {
         );
 
         loop {
-            let Some(conn) = self.ep.accept().await else {
-                return;
-            };
-
+            let conn = self.ep.connect(self.ep.local_addr().unwrap(), "server").unwrap();
             tokio::spawn(Connection::handle(
                 conn,
                 self.users.clone(),

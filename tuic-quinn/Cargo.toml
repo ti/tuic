@@ -6,7 +6,7 @@ description = "A thin layer on top of quinn to provide functions for TUIC"
 categories = ["network-programming"]
 keywords = ["network", "proxy", "quic", "tuic"]
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.78"
 readme = "README.md"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/EAimTY/tuic"
@@ -14,7 +14,7 @@ repository = "https://github.com/EAimTY/tuic"
 [dependencies]
 bytes = { version = "1.6.0", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.30", default-features = false, features = ["io", "std"] }
-quinn = { version = "0.10.2", default-features = false, features = ["futures-io"] }
-thiserror = { version = "1.0.58", default-features = false }
+quinn = { version = "0.11.0", default-features = false, features = ["futures-io"] }
+thiserror = { version = "1.0.60", default-features = false }
 tuic = { path = "../tuic", default-features = false, features = ["async_marshal", "marshal", "model"] }
 uuid = { version = "1.8.0", default-features = false, features = ["std"] }

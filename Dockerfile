@@ -1,8 +1,9 @@
-FROM rust:1.77-alpine as builder
+FROM rust:1.78-alpine as builder
 RUN apk update && apk add --no-cache git \
    musl-dev build-base clang lld compiler-rt \
    openssl openssl-dev openssl-libs-static
 
+# if you does not use clang, just change RUSTFLAGS="-C target-feature=+crt-static"
 ENV CC=clang
 ENV RUSTFLAGS="-C linker=clang -C link-arg=-static"
 
