@@ -4,11 +4,7 @@ use crate::{
     error::Error,
     utils::{self, CongestionControl},
 };
-use quinn::{
-    congestion::{BbrConfig, CubicConfig, NewRenoConfig},
-    Endpoint, EndpointConfig, IdleTimeout, ServerConfig, TokioRuntime, TransportConfig, VarInt,
-    crypto::rustls::QuicServerConfig,
-};
+use quinn::{congestion::{BbrConfig, CubicConfig, NewRenoConfig}, Endpoint, EndpointConfig, IdleTimeout, ServerConfig, TokioRuntime, TransportConfig, VarInt, crypto::rustls::QuicServerConfig};
 
 use rustls::{version, ServerConfig as RustlsServerConfig};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
@@ -128,9 +124,11 @@ impl Server {
         );
 
         loop {
-            let conn = self.ep.connect(self.ep.local_addr().unwrap(), "server").unwrap();
+            let Some(handshake) = self.ep.accept().await else {
+                return;
+            };
             tokio::spawn(Connection::handle(
-                conn,
+                handshake,
                 self.users.clone(),
                 self.udp_relay_ipv6,
                 self.zero_rtt_handshake,

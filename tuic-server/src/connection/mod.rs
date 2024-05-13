@@ -1,7 +1,7 @@
 use self::{authenticated::Authenticated, udp_session::UdpSession};
 use crate::{error::Error, utils::UdpRelayMode};
 use crossbeam_utils::atomic::AtomicCell;
-use quinn::{Connecting, Connection as QuinnConnection, VarInt};
+use quinn::{Incoming, Connection as QuinnConnection, VarInt};
 use register_count::Counter;
 use std::{
     collections::HashMap,
@@ -41,7 +41,7 @@ pub struct Connection {
 #[allow(clippy::too_many_arguments)]
 impl Connection {
     pub async fn handle(
-        conn: Connecting,
+        handshake: Incoming,
         users: Arc<HashMap<Uuid, Box<[u8]>>>,
         udp_relay_ipv6: bool,
         zero_rtt_handshake: bool,
@@ -51,17 +51,17 @@ impl Connection {
         gc_interval: Duration,
         gc_lifetime: Duration,
     ) {
-        let addr = conn.remote_address();
+        let addr = handshake.remote_address();
         let init = async {
             let conn = if zero_rtt_handshake {
-                match conn.into_0rtt() {
+                let incoming = handshake.accept().unwrap();
+                match incoming.into_0rtt() {
                     Ok((conn, _)) => conn,
                     Err(conn) => conn.await?,
                 }
             } else {
-                conn.await?
+                handshake.await?
             };
-
             Ok::<_, Error>(Self::new(
                 conn,
                 users,
