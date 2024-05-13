@@ -3,56 +3,52 @@ use rustls_pemfile::Item;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     fs::{File},
-    io::{BufReader},
+    io::{BufReader, Error as IoError},
     path::PathBuf,
     str::FromStr,
 };
+use std::io::ErrorKind;
 
 
-
-pub fn load_certs(filename: PathBuf) -> Vec<CertificateDer<'static>> {
-    let file = File::open(filename).expect("Failed to open file");
-    let mut reader = BufReader::new(file);
+pub fn load_certs(path: PathBuf) -> Result<Vec<CertificateDer<'static>>, IoError> {
+    let file = BufReader::new(File::open(path)?);
     let mut certs = Vec::new();
+    let mut reader = BufReader::new(file);
 
-    while let Ok(Some(item)) =  rustls_pemfile::read_one(&mut reader) {
-        match item {
-            Item::X509Certificate(cert) => {
-                certs.push(cert);
-            }
-            _ => continue, // Skip other items
+    while let Ok(Some(item)) = rustls_pemfile::read_one(&mut reader) {
+        if let Item::X509Certificate(cert) = item {
+            certs.push(cert);
         }
     }
 
     if certs.is_empty() {
-        // If no X.509 certificates were found, fall back to rustls_pemfile::certs
         certs = rustls_pemfile::certs(&mut reader)
             .map(|result| result.unwrap())
             .collect();
     }
 
-    certs
+    Ok(certs)
 }
 
 
-pub fn load_priv_key(filename: PathBuf) -> PrivateKeyDer<'static> {
-    let keyfile = File::open(&filename).expect("cannot open private key file");
+
+pub fn load_priv_key(filename: PathBuf) -> Result<PrivateKeyDer<'static>, IoError> {
+    let keyfile = File::open(&filename)?;
     let mut reader = BufReader::new(keyfile);
 
-    loop {
-        match rustls_pemfile::read_one(&mut reader).expect("cannot parse private key .pem file") {
-            Some(Item::Pkcs1Key(key)) => return key.into(),
-            Some(Item::Pkcs8Key(key)) => return key.into(),
-            Some(Item::Sec1Key(key)) => return key.into(),
-            None => break,
+    while let Ok(Some(item)) = rustls_pemfile::read_one(&mut reader) {
+        match item {
+            Item::Pkcs1Key(key) => return Ok(key.into()),
+            Item::Pkcs8Key(key) => return Ok(key.into()),
+            Item::Sec1Key(key) => return Ok(key.into()),
             _ => {}
         }
     }
 
-    panic!(
-        "no keys found in {:?} (encrypted keys not supported)",
-        filename
-    );
+    Err(IoError::new(
+        ErrorKind::InvalidData,
+        format!("no keys found in {:?}", filename),
+    ))
 }
 
 

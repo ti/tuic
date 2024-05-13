@@ -30,17 +30,14 @@ pub struct Server {
 
 impl Server {
     pub fn init(cfg: Config) -> Result<Self, Error> {
-        let certs = utils::load_certs(cfg.certificate);
-        let priv_key = utils::load_priv_key(cfg.private_key);
+        let certs = utils::load_certs(cfg.certificate)?;
+        let priv_key = utils::load_priv_key(cfg.private_key)?;
         let provider = Arc::new(rustls::crypto::ring::default_provider());
         let mut crypto = RustlsServerConfig::builder_with_provider(provider.clone())
             .with_protocol_versions(&[&version::TLS13])
-            .expect("inconsistent cipher-suites/versions specified")
+            .unwrap()
             .with_no_client_auth()
-            .with_single_cert(certs, priv_key)
-            .expect("bad certificates/private key");
-
-
+            .with_single_cert(certs, priv_key)?;
         crypto.alpn_protocols = cfg.alpn;
         crypto.max_early_data_size = u32::MAX;
         crypto.send_half_rtt_data = cfg.zero_rtt_handshake;
