@@ -31,8 +31,8 @@ socket2 = { version = "0.5.9", default-features = false }
 socks5-proto = { version = "0.4.1", default-features = false }
 socks5-server = { version = "0.10.1", default-features = false }
 thiserror = { version = "1.0.69", default-features = false }
-tokio = { version = "1.37.0", default-features = false, features = ["io-util", "macros", "net", "parking_lot", "rt-multi-thread", "time"] }
-tokio-util = { version = "0.7.11", default-features = false, features = ["compat"] }
+tokio = { version = "1.44.2", default-features = false, features = ["io-util", "macros", "net", "parking_lot", "rt-multi-thread", "time"] }
+tokio-util = { version = "0.7.15", default-features = false, features = ["compat"] }
 tuic = { path = "../tuic", default-features = false }
 tuic-quinn = { path = "../tuic-quinn", default-features = false }
 uuid = { version = "1.16.0", default-features = false, features = ["serde", "std"] }
